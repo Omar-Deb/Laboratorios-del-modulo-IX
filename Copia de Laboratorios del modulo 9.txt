@@ -1,0 +1,473 @@
+﻿PRÁCTICA 1: Gestión de Servidor con Webmin
+sudo apt update && sudo apt upgrade -y
+Comentario: Actualiza los índices de paquetes y el software del sistema a sus versiones más recientes.
+________________
+
+
+wget https://prdownloads.sourceforge.net/webadmin/webmin_2.111_all.deb
+Comentario: Descarga el instalador oficial de Webmin en formato de paquete Debian.
+________________
+
+
+sudo apt install ./webmin_2.111_all.deb -y
+Comentario: Instala Webmin utilizando el archivo descargado y resuelve dependencias automáticamente.
+________________
+
+
+sudo apt -f install -y
+Comentario: Comando de seguridad para forzar la reparación de dependencias rotas tras la instalación.
+________________
+
+
+sudo systemctl status webmin
+Comentario: Verifica que el servicio de Webmin esté activo y ejecutándose en el sistema.
+________________
+
+
+sudo ufw allow 10000
+Comentario: Abre el puerto 10000 en el firewall para permitir el tráfico entrante a la interfaz web.
+________________
+
+
+sudo /usr/share/webmin/changepass.pl /etc/webmin/ root 1234
+Comentario: Ejecuta el script de Perl para cambiar la contraseña del usuario root de Webmin a "1234".
+________________
+
+
+PRÁCTICA 2: Infraestructura como Código con Terraform
+sudo apt install -y gnupg curl
+Comentario: Instala herramientas para el manejo de llaves GPG y transferencias de datos necesarias para Terraform.
+________________
+
+
+wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+Comentario: Descarga y procesa la llave oficial de HashiCorp para validar la instalación de sus productos.
+________________
+
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+Comentario: Agrega el repositorio oficial de HashiCorp a las fuentes del sistema operativo.
+________________
+
+
+sudo apt update && sudo apt install terraform
+Comentario: Actualiza los repositorios e instala el binario de Terraform.
+________________
+
+
+curl -X GET -H "Content-Type: application/json" -H "Authorization: Bearer TU_TOKEN" "https://api.digitalocean.com/v2/account/keys"
+Comentario: Consulta vía API las llaves SSH cargadas en tu cuenta de DigitalOcean para obtener su ID.
+________________
+
+
+nano main.tf Configuración:
+Terraform
+terraform {
+  required_providers {
+    digitalocean = { source = "digitalocean/digitalocean", version = "~> 2.0" }
+  }
+}
+provider "digitalocean" { token = "TU_TOKEN_DIGITALOCEAN" }
+resource "digitalocean_droplet" "os3vm" {
+  image = "ubuntu-22-04-x64"
+  name = "OS3vm"
+  region = "nyc1"
+  size = "s-1vcpu-1gb"
+  ssh_keys = ["ID_DE_LA_LLAVE"]
+}
+
+
+Comentario: Crea el archivo de configuración para desplegar una VM (Droplet) de Ubuntu en DigitalOcean.
+________________
+
+
+terraform init
+Comentario: Inicializa el directorio de trabajo descargando los proveedores necesarios (DigitalOcean).
+________________
+
+
+terraform apply (Confirmar con yes)
+Comentario: Ejecuta las acciones necesarias para crear la infraestructura definida en el archivo main.tf.
+________________
+
+
+terraform destroy (Confirmar con yes)
+Comentario: Elimina todos los recursos creados por Terraform en la cuenta de DigitalOcean.
+________________
+
+
+## PRÁCTICA #3: Instalación y Configuración de Ansible
+### I. Configuración del Nodo Controlador (VM Controller)
+sudo apt install ansible -y
+Comentario: Instala la plataforma de automatización Ansible en el servidor que actuará como nodo maestro.
+________________
+
+
+sudo mkdir -p /etc/ansible
+Comentario: Crea el directorio de configuración global de Ansible en el sistema.
+________________
+
+
+sudo nano /etc/ansible/ansible.cfg
+Configuración:
+Ini, TOML
+[defaults]
+inventory = /etc/ansible/hosts
+private_key_file = /home/ansible/.ssh/id_rsa
+host_key_checking = False
+ask_become_pass = True
+
+
+[ssh connection]
+ssh_args = -o ForwardAgent=yes -o ControlMaster=auto -o ControlPersist=60s
+
+
+Comentario: Establece los parámetros de comportamiento de Ansible, como la ruta del inventario y la desactivación de la verificación de firmas de host para facilitar la automatización inicial.
+________________
+
+
+sudo nano /etc/ansible/hosts
+Configuración:
+Ini, TOML
+[win]
+192.168.1.2
+[win:vars]
+ansible_user=ansible
+ansible_password=1234
+ansible_port=5985
+ansible_connection=winrm
+ansible_winrm_transport=basic
+ansible_winrm_server_cert_validation=ignore
+
+
+[linux]
+134.199.224.225
+[linux:vars]
+ansible_user=ansible
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_become_password=1234
+
+
+Comentario: Configura el inventario de dispositivos, definiendo los grupos de máquinas y las variables de acceso (WinRM para Windows y SSH para Linux).
+________________
+
+
+### II. Generación de Seguridad (Controller)
+ssh-keygen -t rsa -b 4096
+Comentario: Crea el par de llaves criptográficas RSA de 4096 bits para la autenticación segura entre el servidor y los clientes.
+________________
+
+
+cat ~/.ssh/id_rsa.pub
+Comentario: Expone la clave pública en la terminal para ser copiada y autorizada en los nodos remotos.
+________________
+
+
+### III. Configuración del Cliente Linux (VM DigitalOcean)
+adduser ansible
+Comentario: Crea la cuenta de usuario técnico que utilizará Ansible para gestionar el servidor.
+________________
+
+
+usermod -aG sudo ansible
+Comentario: Concede permisos administrativos al usuario 'ansible' para que pueda ejecutar tareas de configuración.
+________________
+
+
+chsh -s /bin/bash ansible
+Comentario: Asigna Bash como el intérprete de comandos por defecto para asegurar la ejecución correcta de módulos.
+________________
+
+
+sudo mkdir -p /home/ansible/.ssh
+Comentario: Crea el directorio de almacenamiento de credenciales SSH en el nodo remoto.
+________________
+
+
+sudo chmod 700 /home/ansible/.ssh
+Comentario: Protege el directorio de llaves otorgando permisos exclusivos al usuario propietario.
+________________
+
+
+sudo nano /home/ansible/.ssh/authorized_keys
+Configuración: Pegar aquí la llave pública generada en el Controller. Comentario: Instala la clave pública del controlador en la lista de accesos permitidos del cliente Linux.
+________________
+
+
+sudo chmod 600 /home/ansible/.ssh/authorized_keys
+Comentario: Restringe el acceso al archivo de llaves autorizadas para evitar vulnerabilidades de seguridad.
+________________
+
+
+sudo chown -R ansible:ansible /home/ansible/.ssh
+Comentario: Asegura que el usuario 'ansible' sea el dueño de toda la estructura de llaves SSH en su perfil.
+________________
+
+
+### IV. Configuración del Cliente Windows (VM W11)
+wf.msc
+Comentario: Permite habilitar gráficamente las reglas de entrada de "Administración remota de Windows" en el Firewall.
+________________
+
+
+Script de PowerShell (Ejecutar como Administrador)
+Configuración:
+PowerShell
+# 1. Políticas de ejecución y PSRemoting
+Set-ExecutionPolicy RemoteSigned -Force
+Enable-PSRemoting -Force
+
+
+# 2. Configurar WinRM para Ansible
+Set-Item WSMan:\localhost\Service\AllowUnencrypted -Value $true
+Set-Item WSMan:\localhost\Service\Auth\Basic -Value $true
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
+
+
+# 3. Firewall y WinRM
+netsh advfirewall firewall add rule name="WinRM HTTP" dir=in action=allow protocol=TCP localport=5985
+netsh advfirewall firewall set rule group="Administración remota de Windows" new enable=yes
+
+
+# 4. Crear Usuario y Privilegios
+Restart-Service WinRM
+$Password = ConvertTo-SecureString "1234" -AsPlainText -Force
+New-LocalUser -Name "ansible" -Password $Password -FullName "Ansible User"
+Add-LocalGroupMember -Group "Administradores" -Member "ansible"
+
+
+Comentario: Habilita el protocolo WinRM, configura la autenticación básica, abre los puertos necesarios en el firewall y crea el usuario administrador para la gestión remota.
+________________
+
+
+winrm enumerate winrm/config/listener
+Comentario: Comprueba que el servicio de escucha de WinRM esté activo en el equipo Windows.
+________________
+
+
+Test-NetConnection -ComputerName localhost -Port 5985
+Comentario: Verifica localmente que el puerto de administración remota esté abierto y listo para recibir conexiones.
+
+
+________________
+
+
+PRÁCTICA 4: Comandos Ad-Hoc de Ansible
+ansible win -m win_shell -a "dir C:\Users\ansible\Desktop"
+Comentario: Ejecuta un comando remoto en Windows para listar el contenido del escritorio.
+________________
+
+
+ansible win -i /etc/ansible/hosts -m win_copy -a "src='C:/Users/ansible/Desktop/Prueba.txt' dest='C:/Users/ansible/Documents/' remote_src=yes"
+Comentario: Copia un archivo entre directorios locales dentro del mismo servidor Windows.
+________________
+
+
+ansible linux -i /etc/ansible/hosts -m reboot -b
+Comentario: Reinicia el servidor Linux de DigitalOcean utilizando privilegios de superusuario.
+________________
+
+
+ansible linux -a "uptime"
+Comentario: Consulta el tiempo que lleva encendido el servidor Linux tras el reinicio.
+________________
+
+
+PRÁCTICA 5: Automatización con Playbooks
+sudo nano /etc/ansible/install_notepad.yml Configuración:
+YAML
+- name: Descargar e instalar Notepad++
+  hosts: win
+  tasks:
+    - name: Descargar el instalador
+      win_get_url:
+        url: "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.5.8/npp.8.5.8.Installer.x64.exe"
+        dest: 'C:\Users\ansible\Downloads\npp_installer.exe'
+    - name: Instalar de forma silenciosa
+      win_shell: |
+        Start-Process -FilePath "C:\Users\ansible\Downloads\npp_installer.exe" -ArgumentList "/S" -Wait
+      args:
+        executable: powershell
+
+
+Comentario: Playbook que descarga e instala Notepad++ en Windows de manera desatendida.
+________________
+
+
+sudo nano /etc/ansible/install_nginx.yml Configuración:
+YAML
+- name: Instalar y configurar Nginx en Linux
+  hosts: linux
+  become: yes
+  tasks:
+    - name: Instalar Nginx
+      apt:
+        name: nginx
+        state: latest
+        update_cache: yes
+    - name: Habilitar servicio
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+
+Comentario: Playbook para automatizar la instalación y el arranque del servidor web Nginx en Linux.
+________________
+
+
+ansible-playbook /etc/ansible/install_nginx.yml
+Comentario: Comando para ejecutar el archivo YAML y aplicar las tareas de configuración en los nodos.
+Notas de 9.3>
+
+
+VM controller
+
+
+sudo apt install ansible -y
+sudo mkdir -p /etc/ansible
+cd /etc/ansible
+sudo nano ansible.cfg
+sudo nano /etc/ansible/hosts
+
+
+
+
+(En ansible.cfg)
+
+
+
+
+[defaults]
+
+
+inventory = /etc/ansible/hosts
+private_key_file = /home/ansible/.ssh/id_rsa
+host_key_checking = False
+ask_become_pass = True
+
+
+[ssh connection]
+
+
+ssh_args = -o ForwardAgent=yes -o ControlMaster=auto -o ControlPersist=60s
+
+
+(Nano hosts)
+
+
+
+
+[win]
+192.168.1.2
+
+
+[win:vars]
+
+
+ansible_user-ansible
+ansible_password=1234
+ansible_port=5985
+ansible_connection=winrm
+ansible_winrm_transport-basic
+ansible_winrm_server_cert_validation=ignore
+
+
+
+
+[linux]
+134.199.224.225
+
+
+[linux:vars]
+ansible_user=ansible
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_become_password=1234
+
+
+
+
+
+
+
+
+ssh-keygen -t rsa -b 4096
+
+
+
+
+cat ~/.ssh/id_rsa.pub 
+
+
+
+
+VM digitalocean
+
+
+adduser ansible
+usermod -aG sudo ansible
+chsh -s /bin/bash ansible
+sudo mkdir -p /home/ansible/.ssh
+sudo chmod 700 /home/ansible/.ssh
+sudo nano /home/ansible/.ssh/authorized_keys
+        pegamos la key-ssh de la controller
+sudo chmod 600 /home/ansible/.ssh/authorized_keys
+sudo chown -R ansible:ansible /home/ansible/.ssh
+
+
+
+
+VM w11
+en ejecutar poner 
+wf.msc
+
+
+en reglas de entrada habilitar estas 4
+
+
+ Administración remota de servicios (NP de entrada)
+ Administración remota de servicios (NP de entrada)
+ Administración remota de servicios (RPC)
+ Administración remota de servicios (RPC)
+
+
+
+
+en configuracion ir a red y ponerla privada
+
+
+configuración que va en powershell
+
+
+# 1. Políticas de ejecución y habilitar PSRemoting
+Set-ExecutionPolicy RemoteSigned -Force
+Enable-PSRemoting -Force
+
+
+# 2. Configurar WinRM para permitir conexiones básicas y sin cifrar (necesario para pruebas)
+Set-Item WSMan:\localhost\Service\AllowUnencrypted -Value $true
+Set-Item WSMan:\localhost\Service\Auth\Basic -Value $true
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
+
+
+# 3. Abrir el puerto 5985 en el Firewall (Comando en una sola línea corregido)
+netsh advfirewall firewall add rule name="WinRM HTTP" dir=in action=allow protocol=TCP localport=5985
+
+
+# 4. Habilitar el grupo de reglas de administración remota
+netsh advfirewall firewall set rule group="Administración remota de Windows" new enable=yes
+
+
+# 5. Reiniciar el servicio para aplicar cambios
+Restart-Service WinRM
+
+
+# 6. Crear el usuario 'ansible' y agregarlo al grupo de Administradores
+$Password = ConvertTo-SecureString "1234" -AsPlainText -Force
+New-LocalUser -Name "ansible" -Password $Password -FullName "Ansible User" -Description "Usuario para Ansible"
+Add-LocalGroupMember -Group "Administradores" -Member "ansible"
+
+
+# 7. Verificación final
+winrm enumerate winrm/config/listener
+Test-NetConnection -ComputerName localhost -Port 5985
